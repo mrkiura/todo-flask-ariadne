@@ -2,7 +2,8 @@ import os
 from datetime import datetime
 
 from ariadne import QueryType, MutationType, convert_kwargs_to_snake_case, \
-    make_executable_schema, snake_case_fallback_resolvers, graphql_sync
+    make_executable_schema, snake_case_fallback_resolvers, graphql_sync, \
+    load_schema_from_path
 from ariadne.constants import PLAYGROUND_HTML
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -17,36 +18,6 @@ class Config(object):
 
 app.config.from_object(Config)
 db = SQLAlchemy(app)
-
-type_defs = """
-  type Todo {
-    id: ID!
-    description: String!
-    completed: Boolean!
-    dueDate: String!
-  }
-  type Query {
-    todos: [Todo]!
-    todo(todoId: ID!): Todo
-  }
-
-  input TodoInput {
-    description: String!, 
-    dueDate: Float!
-  }
-  
-  type deleteTodoResult {
-    success: Boolean!,
-    errors: [String]
-  }
-  
-  type Mutation {
-    createTodo(description: String!, dueDate: String!): Todo!
-    deleteTodo(todoId: ID!): deleteTodoResult!
-    markDone(todoId: String!): Todo
-    updateDueDate(todoId: String, newDate: String!): Todo
-   }
-"""
 
 query = QueryType()
 mutation = MutationType()
@@ -86,6 +57,9 @@ def resolve_create_todo(obj, info, description, due_date):
     return todo.to_dict()
 
 
+mutation.set_field("createTodo", resolve_create_todo)
+
+
 @mutation.field("deleteTodo")
 @convert_kwargs_to_snake_case
 def resolve_delete_todo(obj, info, todo_id):
@@ -119,6 +93,7 @@ def resolve_update_due_date(obj, info, todo_id, new_date):
     return todo.to_dict()
 
 
+type_defs = load_schema_from_path("schema.graphql")
 schema = make_executable_schema(
     type_defs, [query, mutation], snake_case_fallback_resolvers
 )
@@ -142,6 +117,16 @@ def graphql_server():
 
     status_code = 200 if success else 400
     return jsonify(result), status_code
+
+
+from flask import Flask
+
+app = Flask(__name__)
+
+
+@app.route('/')
+def hello():
+    return 'Hello!'
 
 
 if __name__ == '__main__':
